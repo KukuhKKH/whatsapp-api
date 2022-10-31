@@ -26,5 +26,10 @@ Route.get('/', async () => {
 
 Route.group(() => {
   Route.get('find/:session', 'SessionController.find').middleware('session')
+  Route.get('get-qrcode/:session', 'SessionController.getQr')
   Route.post('add', 'SessionController.add')
 }).prefix('session')
+
+Route.group(() => {
+  Route.post('send', 'WhatsappsController.send')
+}).prefix('chat')

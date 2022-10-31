@@ -12,6 +12,7 @@ import { toDataURL } from 'qrcode'
 import { rmSync, readdir } from 'fs'
 import { dirname, basename, join } from 'path'
 import { fileURLToPath } from 'url'
+import WhatsappModel from 'App/Models/WhatsappModel'
 
 class Wa {
   public sessions = new Map()
@@ -23,6 +24,7 @@ class Wa {
   }
 
   public async createSession(sessionId = '', isLegacy = false, request = false, response = false) {
+    await WhatsappModel.updateOrCreate({ name: sessionId }, { name: sessionId })
     const sessionFile = (isLegacy ? 'legacy_' : 'md_') + sessionId + (isLegacy ? '.json' : '')
 
     const logger = pino({ level: 'warn' })
@@ -65,15 +67,17 @@ class Wa {
       const statusCode = lastDisconnect?.error?.output?.statusCode
 
       if (connection === 'open') {
+        await WhatsappModel.query().where('name', '=', sessionId).update('session', true)
         this.retries.delete(sessionId)
       }
 
       if (connection === 'close') {
         if (statusCode === DisconnectReason.loggedOut || !this.shouldReconnect(sessionId)) {
+          // await WhatsappModel.query().where('name', '=', sessionId).delete()
           this.deleteSession(sessionId, isLegacy)
 
           if (response) {
-            response.apiError('Unable to create session.')
+            return response.apiError('Unable to create session.')
           }
         }
 
@@ -86,20 +90,20 @@ class Wa {
       }
 
       if (update.qr) {
-        if (request) {
-          try {
-            const qr = await toDataURL(update.qr)
+        try {
+          const qr = await toDataURL(update.qr)
 
-            return response.apiSuccess(
-              {
-                qr,
-              },
-              'QR code received, please scan the QR code.'
-            )
-          } catch {
-            if (response) {
-              response.apiError('Unable to create QR code.')
-            }
+          await WhatsappModel.query().where('name', '=', sessionId).update('qrcode', qr)
+
+          return response.apiSuccess(
+            {
+              qr,
+            },
+            'QR code received, please scan the QR code.'
+          )
+        } catch {
+          if (response) {
+            return response.apiError('Unable to create QR code.')
           }
         }
 
@@ -111,6 +115,7 @@ class Wa {
         }
       }
     })
+    return this.sessions.get(sessionId) ?? null
   }
 
   public async shouldReconnect(sessionId) {
@@ -134,12 +139,12 @@ class Wa {
   }
 
   public async deleteSession(sessionId, isLegacy = false) {
-    // const sessionFile = (isLegacy ? 'legacy_' : 'md_') + sessionId + (isLegacy ? '.json' : '')
-    // const storeFile = `${sessionId}_store.json`
-    // const rmOptions = { force: true, recursive: true }
+    const sessionFile = (isLegacy ? 'legacy_' : 'md_') + sessionId + (isLegacy ? '.json' : '')
+    const storeFile = `${sessionId}_store.json`
+    const rmOptions = { force: true, recursive: true }
 
-    // rmSync(sessionsDir(sessionFile), rmOptions)
-    // rmSync(sessionsDir(storeFile), rmOptions)
+    rmSync(this.sessionsDir(sessionFile), rmOptions)
+    rmSync(this.sessionsDir(storeFile), rmOptions)
 
     this.sessions.delete(sessionId)
     this.retries.delete(sessionId)
@@ -234,6 +239,8 @@ class Wa {
         const filename = file.replace('.json', '')
         const isLegacy = filename.split('_', 1)[0] !== 'md'
         const sessionId = filename.substring(isLegacy ? 7 : 3)
+
+        WhatsappModel.updateOrCreate({ name: sessionId }, { name: sessionId })
 
         this.createSession(sessionId, isLegacy)
       }
