@@ -1,15 +1,20 @@
 import BaseSchema from '@ioc:Adonis/Lucid/Schema'
 
 export default class extends BaseSchema {
-  protected tableName = 'whatsapps'
+  protected tableName = 'outboxes'
 
   public async up() {
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id')
-      table.string('phone').nullable
-      table.string('name').nullable
-      table.text('qrcode').nullable
-      table.boolean('session').nullable
+      table.bigInteger('whatsapp_id')
+      table.string('type')
+      table.string('phone')
+      table.text('message').nullable
+      table.text('option').nullable
+      table.enum('status', ['0', '1', '2']).defaultTo('0')
+      table.text('status_response')
+      table.datetime('date')
+      table.string('send_at')
 
       /**
        * Uses timestamptz for PostgreSQL and DATETIME2 for MSSQL

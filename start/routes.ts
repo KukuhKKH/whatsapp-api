@@ -26,9 +26,10 @@ Route.get('/', async () => {
 
 Route.group(() => {
   Route.get('find/:session', 'SessionController.find').middleware('session')
+  Route.post('delete-client', 'SessionController.delete')
   Route.get('get-qrcode/:session', 'SessionController.getQr')
-  Route.post('add', 'SessionController.add')
-}).prefix('session')
+  Route.post('new-client', 'SessionController.add')
+})
 
 Route.group(() => {
   Route.post('send', 'WhatsappsController.send')

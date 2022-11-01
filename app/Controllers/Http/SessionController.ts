@@ -16,21 +16,44 @@ export default class SessionController {
   }
 
   public async add({ request, response }: HttpContextContract) {
-    const { id, isLegacy } = request.requestBody
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    const { phone, isLegacy } = request.requestBody
+    const whatsappData = await WhatsappModel.query().where('phone', '=', phone).first()
 
-    if (await WA.isSessionExists(id)) {
+    if (await WA.isSessionExists(whatsappData.id)) {
       return response.apiError('Session already exists, please use another id.')
     }
 
-    const newSession = await WA.createSession(id, false, request, response)
-    return response.apiSuccess({ data: newSession }, 'Session found')
+    const newSession = await WA.createSession(whatsappData.id, isLegacy, request, response)
+    return response.apiSuccess({}, 'Session found')
   }
 
   public async getQr({ params, response }: HttpContextContract) {
     try {
       const { session } = params
-      const whatsapp = await WhatsappModel.query().where('name', '=', params)
-      return response.apiSuccess(whatsapp.qrcode, 'Success Get QR Code Whatsapp')
+      const whatsapp = await WhatsappModel.query().where('name', '=', session).first()
+      if (whatsapp === null) {
+        return response.apiError('Session not found.')
+      }
+      return response.apiSuccess(whatsapp, 'Success Get QR Code Whatsapp')
+    } catch (error) {
+      return response.apiError(error)
+    }
+  }
+
+  public async delete({ request, response }: HttpContextContract) {
+    try {
+      const { phone } = request.requestBody
+      const whatsappData = await WhatsappModel.query().where('phone', '=', phone).first()
+      if (whatsappData === null) {
+        return response.apiError('Session not found.')
+      }
+      const session = whatsappData.name
+
+      await WhatsappModel.query().where('name', '=', whatsappData.name).delete()
+      const sessionClient = await WA.getSession(session)
+      WA.deleteSession(session, false, sessionClient)
+      return response.apiSuccess({}, 'Success Delete Whatsapp Session')
     } catch (error) {
       return response.apiError(error)
     }

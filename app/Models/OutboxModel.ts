@@ -1,25 +1,13 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column } from '@ioc:Adonis/Lucid/Orm'
 
-export default class WhatsappModel extends BaseModel {
+export default class OutboxModel extends BaseModel {
   public static get table() {
-    return 'whatsapps'
+    return 'outboxes'
   }
 
   @column({ isPrimary: true })
   public id: number
-
-  @column()
-  public phone: string
-
-  @column()
-  public name: string
-
-  @column()
-  public qrcode: string
-
-  @column()
-  public session: boolean
 
   @column.dateTime({ autoCreate: true })
   public createdAt: DateTime

@@ -12,6 +12,7 @@ import { toDataURL } from 'qrcode'
 import { rmSync, readdir } from 'fs'
 import { dirname, basename, join } from 'path'
 import { fileURLToPath } from 'url'
+import moment from 'moment'
 import WhatsappModel from 'App/Models/WhatsappModel'
 
 class Wa {
@@ -24,7 +25,7 @@ class Wa {
   }
 
   public async createSession(sessionId = '', isLegacy = false, request = false, response = false) {
-    await WhatsappModel.updateOrCreate({ name: sessionId }, { name: sessionId })
+    // await WhatsappModel.updateOrCreate({ id: sessionId }, { id: sessionId })
     const sessionFile = (isLegacy ? 'legacy_' : 'md_') + sessionId + (isLegacy ? '.json' : '')
 
     const logger = pino({ level: 'warn' })
@@ -54,7 +55,17 @@ class Wa {
     }
     this.sessions.set(sessionId, { ...wa, store, isLegacy })
 
-    wa.ev.on('creds.update', saveState)
+    wa.ev.on('creds.update', async (updateData) => {
+      if (updateData.me) {
+        let myNumber = updateData.me.id.split(':')
+        let myName = updateData.me.name !== '' ? updateData.me.name : sessionId
+        await WhatsappModel.query().where('id', '=', sessionId).update({
+          phone: myNumber[0],
+          name: myName,
+        })
+      }
+      saveState()
+    })
 
     wa.ev.on('chats.set', ({ chats }) => {
       if (isLegacy) {
@@ -67,7 +78,12 @@ class Wa {
       const statusCode = lastDisconnect?.error?.output?.statusCode
 
       if (connection === 'open') {
-        await WhatsappModel.query().where('name', '=', sessionId).update('session', true)
+        let date = moment().format('YYYY-MM-DD H:mm:s')
+        await WhatsappModel.query().where('id', '=', sessionId).update({
+          session: true,
+          qrcode: null,
+          connected_at: date,
+        })
         this.retries.delete(sessionId)
       }
 
@@ -93,7 +109,7 @@ class Wa {
         try {
           const qr = await toDataURL(update.qr)
 
-          await WhatsappModel.query().where('name', '=', sessionId).update('qrcode', qr)
+          await WhatsappModel.query().where('id', '=', sessionId).update('qrcode', qr)
 
           return response.apiSuccess(
             {
@@ -138,10 +154,11 @@ class Wa {
     return this.sessions.get(sessionId) ?? null
   }
 
-  public async deleteSession(sessionId, isLegacy = false) {
+  public async deleteSession(sessionId, isLegacy = false, sessionClient = '') {
     const sessionFile = (isLegacy ? 'legacy_' : 'md_') + sessionId + (isLegacy ? '.json' : '')
     const storeFile = `${sessionId}_store.json`
     const rmOptions = { force: true, recursive: true }
+    // sessionClient.ws.close()
 
     rmSync(this.sessionsDir(sessionFile), rmOptions)
     rmSync(this.sessionsDir(storeFile), rmOptions)
@@ -226,24 +243,28 @@ class Wa {
   }
 
   public async init() {
-    readdir(this.sessionsDir(), (err, files) => {
-      if (err) {
-        throw err
-      }
+    // await readdir(this.sessionsDir(), async (err, files) => {
+    //   if (err) {
+    //     throw err
+    //   }
 
-      for (const file of files) {
-        if ((!file.startsWith('md_') && !file.startsWith('legacy_')) || file.endsWith('_store')) {
-          continue
-        }
+    //   for (const file of files) {
+    //     if ((!file.startsWith('md_') && !file.startsWith('legacy_')) || file.endsWith('_store')) {
+    //       continue
+    //     }
 
-        const filename = file.replace('.json', '')
-        const isLegacy = filename.split('_', 1)[0] !== 'md'
-        const sessionId = filename.substring(isLegacy ? 7 : 3)
+    //     const filename = file.replace('.json', '')
+    //     const isLegacy = filename.split('_', 1)[0] !== 'md'
+    //     const sessionId = filename.substring(isLegacy ? 7 : 3)
 
-        WhatsappModel.updateOrCreate({ name: sessionId }, { name: sessionId })
+    //     await WhatsappModel.updateOrCreate({ id: sessionId }, { id: sessionId })
 
-        this.createSession(sessionId, isLegacy)
-      }
+    //     this.createSession(sessionId, isLegacy)
+    //   }
+    // })
+    const whatsapps = await WhatsappModel.all()
+    whatsapps.forEach((element) => {
+      this.createSession(`${element.id}`, false)
     })
   }
 }
